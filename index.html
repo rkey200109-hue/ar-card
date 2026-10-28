@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Card</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    }
+  }
+  </script>
+  <style>
+    html, body { margin: 0; height: 100%; }
+    #container { width: 100vw; height: 100vh; overflow: hidden; }
+    #hint {
+      position: fixed; top: 12px; left: 0; right: 0; text-align: center;
+      color: #fff; font: 16px/1.4 system-ui, sans-serif; z-index: 10;
+      text-shadow: 0 1px 4px rgba(0,0,0,.8); pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div id="hint">Point your camera at the QR card</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { MindARThree } from 'mindar-image-three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // ---- Tune these to taste ----
+    const SCALE = 0.7;          // model size relative to the card (card width = 1 unit)
+    const HOVER_HEIGHT = 0.55;  // how far above the card's center the model floats
+    const BOB_AMOUNT = 0.04;    // gentle up/down float (0 = perfectly still)
+    const FLIP = false;         // true if the model shows you its back
+    // -----------------------------
+
+    const mindarThree = new MindARThree({
+      container: document.querySelector('#container'),
+      imageTargetSrc: './targets.mind',
+      filterMinCF: 1,
+      filterBeta: 10000,
+      missTolerance: 0,
+      warmupTolerance: 0,
+    });
+
+    const anchor = mindarThree.addAnchor(0); // 0 = the (first) image in targets.mind
+
+    // A group that bobs; the model hangs off it so tracking isn't disturbed
+    const floatGroup = new THREE.Group();
+    anchor.group.add(floatGroup);
+    floatGroup.visible = false;
+
+    const loader = new GLTFLoader();
+    loader.load('./model.glb', (gltf) => {
+      const model = gltf.scene;
+      model.scale.setScalar(SCALE);
+      model.position.set(0, HOVER_HEIGHT, 0); // base of model lifted above the card
+      if (FLIP) model.rotation.y = Math.PI;
+      floatGroup.add(model);
+      document.querySelector('#hint').style.display = 'none';
+    });
+
+    anchor.onTargetFound = () => { floatGroup.visible = true; };
+    anchor.onTargetLost  = () => { floatGroup.visible = false; };
+
+    const start = async () => {
+      const { renderer, scene, camera } = mindarThree;
+      await mindarThree.start();
+      const clock = new THREE.Clock();
+      renderer.setAnimationLoop(() => {
+        if (BOB_AMOUNT > 0) {
+          floatGroup.position.y = Math.sin(clock.getElapsedTime() * 2) * BOB_AMOUNT;
+        }
+        renderer.render(scene, camera);
+      });
+    };
+
+    // iOS requires a user gesture before the camera may open
+    document.body.addEventListener('pointerdown', start, { once: true });
+    start();
+  </script>
+</body>
+</html>
