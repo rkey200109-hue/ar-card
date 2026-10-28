@@ -7,20 +7,20 @@
 <script type="module">
 import * as THREE from 'three';import {MindARThree} from 'mindar-image-three';import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const container=document.querySelector('#camera'),statusBox=document.querySelector('#statusBox'),status=document.querySelector('#status'),retry=document.querySelector('#retry');
-const ar=new MindARThree({container,imageTargetSrc:'./targets-v2.mind',maxTrack:1,missTolerance:8,warmupTolerance:3,uiLoading:'no',uiScanning:'no',uiError:'no'}),{renderer,scene,camera}=ar;
+const ar=new MindARThree({container,imageTargetSrc:'./targets-v3.mind',maxTrack:1,missTolerance:8,warmupTolerance:3,uiLoading:'no',uiScanning:'no',uiError:'no'}),{renderer,scene,camera}=ar;
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.domElement.style.zIndex='1';ar.cssRenderer.domElement.style.zIndex='2';ar.cssRenderer.domElement.style.pointerEvents='none';
 scene.add(new THREE.HemisphereLight(0xffffff,0x888899,2));const light=new THREE.DirectionalLight(0xffffff,1);light.position.set(1,2,3);scene.add(light);
 // MindAR hides its own anchors on loss. A separate root holds the last usable
 // anchor matrix in scene/camera coordinates; it is not a world-tracking pose.
 const poseRoot=new THREE.Group(),rig=new THREE.Group();poseRoot.visible=false;scene.add(poseRoot);poseRoot.add(rig);
-const anchors=[ar.addAnchor(0),ar.addAnchor(1)];
+const anchors=[ar.addAnchor(0),ar.addAnchor(1),ar.addAnchor(2)];
 const choices=[{name:'MetaScan character',path:'hand-scene.glb'},{name:'Dog',path:'model.glb'},{name:'Meta twin',path:'twin.glb'},{name:'Animated character',path:'animated.glb'}];
 const loader=new GLTFLoader(),clock=new THREE.Clock(),desiredPosition=new THREE.Vector3(),desiredRotation=new THREE.Quaternion(),desiredScale=new THREE.Vector3();
 let selected=0,model=null,modelBounds=null,mixer=null,loading=false,generation=0,running=false,hasPose=false,activeTarget=-1,trackingState='SEARCHING';
 const debugEvents=[];
 function record(state){if(trackingState===state)return;trackingState=state;if(new URLSearchParams(location.search).has('debug')){debugEvents.push({state,time:performance.now(),visible:poseRoot.visible,target:activeTarget});if(debugEvents.length>100)debugEvents.shift()}}
 if(new URLSearchParams(location.search).has('debug'))window.__metaScanDebug={get state(){return trackingState},get visible(){return poseRoot.visible},get target(){return activeTarget},get model(){return choices[selected].name},get position(){return poseRoot.position.toArray()},get meshCount(){let count=0;if(model)model.traverse(o=>{if(o.isMesh)count++});return count},get events(){return debugEvents.slice()}};
-function setModelScale(){if(!model||!modelBounds)return;const target=activeTarget<0?poseRoot.userData.target:activeTarget;const markerRatio=target===1?3.0:2.5;const height=modelBounds.max.y-modelBounds.min.y;const factor=markerRatio/height;model.scale.setScalar(factor);model.rotation.x=Math.PI/2;model.position.z=.003-modelBounds.min.y*factor;}
+function setModelScale(){if(!model||!modelBounds)return;const target=activeTarget<0?poseRoot.userData.target:activeTarget;const markerRatio=target===2?3.0:2.5;const height=modelBounds.max.y-modelBounds.min.y;const factor=markerRatio/height;model.scale.setScalar(factor);model.rotation.x=Math.PI/2;model.position.z=.003-modelBounds.min.y*factor;}
 function showStatus(){
  statusBox.hidden=false;
  if(loading){status.textContent='Loading '+choices[selected].name+'…';return}
