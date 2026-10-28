@@ -1,75 +1,25 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>MetaScan AR</title>
-  <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","mindar-image-three":"https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"}}</script>
-  <style>
-    html,body,#camera { margin:0;width:100%;height:100%;overflow:hidden; }
-    body { background:#070913; color:white;font:16px system-ui,sans-serif; }
-    #camera { position:relative;isolation:isolate; }
-    #message { position:fixed;z-index:10;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;
-      text-align:center;padding:12px;border-radius:14px;background:rgba(0,0,0,.68);line-height:1.4; }
-    #retry { margin:8px auto 0;padding:11px 20px;border:0;border-radius:10px;background:#1766de;color:white;font:600 16px system-ui; }
-  </style>
-</head>
-<body>
-  <div id="camera" aria-label="Camera view"></div>
-  <div id="message" role="status" aria-live="polite"><span id="status">Opening camera. Please allow camera access.</span><br><button id="retry" type="button" hidden>Try again</button></div>
-  <script type="module">
-    import * as THREE from 'three';
-    import { MindARThree } from 'mindar-image-three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
-    const container=document.querySelector('#camera');
-    const message=document.querySelector('#message');
-    const status=document.querySelector('#status');
-    const retry=document.querySelector('#retry');
-    const ar=new MindARThree({container,imageTargetSrc:'./targets.mind',uiLoading:'no',uiScanning:'no',uiError:'no'});
-    const {renderer,scene,camera}=ar;
-    renderer.outputColorSpace=THREE.SRGBColorSpace;
-    renderer.domElement.style.zIndex='1';
-    ar.cssRenderer.domElement.style.zIndex='2';
-    ar.cssRenderer.domElement.style.pointerEvents='none';
-    scene.add(new THREE.HemisphereLight(0xffffff,0x8b93a8,2.1));
-    const key=new THREE.DirectionalLight(0xffffff,1.2);key.position.set(1,2,3);scene.add(key);
-    const anchor=ar.addAnchor(0);
-    const content=new THREE.Group();anchor.group.add(content);
-    let ready=false, found=false, running=false, starting=false;
-    function updateGuide() {
-      message.hidden=ready && found;
-      if (!found && running) status.textContent=ready?'Point at the whole printed QR code.':'Loading character…';
-    }
-    anchor.onTargetFound=()=>{found=true;updateGuide();};
-    anchor.onTargetLost=()=>{found=false;updateGuide();};
-    new GLTFLoader().load('./model-card-solid.glb',({scene:model})=>{
-      // The model is 0.127 m tall.  Scale relative to MindAR's one-card-wide units.
-      model.scale.setScalar(8.0);
-      model.rotation.x=Math.PI/2;
-      model.position.set(-.20,0,.003);
-      content.add(model);ready=true;updateGuide();
-    },undefined,()=>{status.textContent='The model could not load. Check your connection and reload.';message.hidden=false;});
-    async function start() {
-      if(starting||running)return;
-      starting=true;retry.hidden=true;status.textContent='Opening camera. Please allow camera access.';
-      try {
-        const promise=ar.start();
-        if(ar.video)ar.video.style.zIndex='0';
-        await promise;
-        running=true;
-        renderer.setAnimationLoop(()=>renderer.render(scene,camera));
-        updateGuide();
-      } catch(error) {
-        console.error('Unable to start camera',error);
-        status.textContent='Camera unavailable. Allow camera access in Safari settings, then try again.';
-        retry.hidden=false;
-      } finally {starting=false;}
-    }
-    retry.addEventListener('click',()=>location.reload());
-    window.addEventListener('pagehide',()=>{if(running){renderer.setAnimationLoop(null);try{ar.stop();}catch(e){console.error(e);}running=false;}});
-    window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
-    start();
-  </script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090c19"><title>META SCAN AR</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#090c19;color:#fff;font:16px/1.4 system-ui,-apple-system,sans-serif;display:grid;place-items:center}main{width:min(440px,100%);padding:24px;text-align:center}h1{font-size:26px;letter-spacing:.04em;margin:0 0 14px}.card{position:relative;overflow:hidden;background:#191b26;border-radius:22px}#preview{display:block;width:100%;aspect-ratio:1;object-fit:contain}.name{margin:14px 0 12px;font-size:18px}nav{display:flex;gap:12px}a.launch,button{border:0;border-radius:14px;color:white;font:700 17px system-ui;min-height:56px}a.launch{flex:1;display:flex;align-items:center;justify-content:center;background:#1865e6;text-decoration:none}a.launch img{width:1px;height:1px;opacity:.01;position:absolute}button{background:#303b61;width:64px;display:grid;place-items:center;cursor:pointer}button svg{width:27px;height:27px}p{color:#bec5db;font-size:14px;line-height:1.5;margin:18px 0 0}button:focus-visible,a:focus-visible{outline:3px solid white;outline-offset:3px}
+</style></head><body><main><h1>META SCAN AR</h1><div class="card"><img id="preview" src="random-featured.png" alt="Selected 3D model"></div><div class="name" id="name" aria-live="polite">Preparing a model…</div><nav><a id="ar-link" class="launch" rel="ar" href="random-featured.usdz#allowsContentScaling=1"><img id="ar-image" src="random-featured.png" alt="">View in AR</a><button id="shuffle" type="button" aria-label="Choose another random model" title="Choose another random model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 17 5.7L20 8M4 16l3 2.3A7 7 0 0 0 18.4 15"/></svg></button></nav><p>In AR, pinch to resize, drag to move, and rotate with two fingers. Close AR and tap the arrows for another model.</p></main>
+<script>
+(()=>{
+const models=[
+ {name:'MetaScan character',file:'random-featured.usdz',image:'random-featured.png'},
+ {name:'Dog',file:'random-dog.usdz',image:'random-dog.png'},
+ {name:'Meta twin',file:'random-twin.usdz',image:'random-twin.png'},
+ {name:'Animated character',file:'random-animated.usdz',image:'random-animated.png'}
+];
+let previous=-1;
+try{const raw=sessionStorage.getItem('lastMetaScan');const saved=Number(raw);if(raw!==null&&Number.isInteger(saved)&&saved>=0&&saved<models.length)previous=saved}catch(e){}
+function choose(){
+ let index=Math.floor(Math.random()*(models.length-1));if(index>=previous)index++;if(previous<0)index=Math.floor(Math.random()*models.length);
+ previous=index;try{sessionStorage.setItem('lastMetaScan',String(index))}catch(e){}
+ const m=models[index];document.querySelector('#name').textContent=m.name;
+ document.querySelector('#preview').src=m.image;document.querySelector('#preview').alt=m.name+' preview';
+ document.querySelector('#ar-image').src=m.image;document.querySelector('#ar-link').href=m.file+'#allowsContentScaling=1';
+}
+document.querySelector('#shuffle').addEventListener('click',choose);choose();
+})();
+</script></body></html>
