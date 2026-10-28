@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View in AR</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: #0b0b0f;
+      color: #fff;
+      font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center; padding: 24px;
+      box-sizing: border-box; min-height: 100vh;
+    }
+    h1 { font-size: 28px; font-weight: 700; margin: 0 0 8px; }
+    p.sub { color: #9a9aa5; margin: 0 0 40px; font-size: 16px; }
+    a.ar {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: #0a84ff; color: #fff; text-decoration: none;
+      padding: 18px 44px; border-radius: 16px;
+      font-size: 20px; font-weight: 600;
+      box-shadow: 0 4px 24px rgba(10,132,255,.4);
+    }
+    a.ar:active { transform: scale(.97); }
+    .hint { color: #7a7a85; font-size: 14px; margin-top: 28px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <h1>View your model in AR</h1>
+  <p class="sub">Place it in your space, then explore it</p>
+  <a class="ar" rel="ar" href="model.usdz">&#128247; View in AR</a>
+  <p class="hint">
+    Pinch to zoom &bull; drag to move &bull; rotate 360&deg;<br>
+    (Best on iPhone/iPad — opens Apple AR Quick Look)
+  </p>
+</body>
+</html>
