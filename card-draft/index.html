@@ -1,34 +1,64 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>MetaScan Card Tracking Draft</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#070913"><title>MetaScan AR</title>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","mindar-image-three":"https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"}}</script>
-<style>html,body,#camera{margin:0;width:100%;height:100%;overflow:hidden}body{background:#070913;color:white;font:15px system-ui,sans-serif}#camera{position:relative;isolation:isolate;touch-action:none}#msg{position:fixed;z-index:10;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;text-align:center;padding:10px;border-radius:12px;background:#000b}#controls{position:fixed;z-index:11;bottom:max(14px,env(safe-area-inset-bottom));left:12px;right:12px;display:flex;gap:8px;justify-content:center}button,a{border:0;border-radius:12px;background:#155ed1;color:white;padding:12px 16px;font:600 15px system-ui;text-decoration:none}#retry{margin:8px auto 0}#info{position:fixed;z-index:10;bottom:75px;left:16px;right:16px;background:#000b;text-align:center;padding:9px;border-radius:10px;font-size:13px}</style></head><body>
-<div id="camera" aria-label="Camera view"></div><div id="msg" role="status"><span id="status">Opening camera. Allow camera access.</span><br><button id="retry" hidden>Try again</button></div>
-<div id="info">Card-tracking draft: keep the QR visible. Drag, pinch, or twist with two fingers.</div>
-<div id="controls"><button id="next" aria-label="Choose another model">↻ Another model</button><a href="../">Surface AR</a></div>
+<style>html,body,#camera{margin:0;width:100%;height:100%;overflow:hidden}body{background:#070913;color:white;font:15px system-ui,sans-serif}#camera{position:relative;isolation:isolate;touch-action:none}#statusBox{position:fixed;z-index:10;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;text-align:center;padding:11px;border-radius:12px;background:#000b;line-height:1.4}#tools{position:fixed;z-index:11;bottom:max(14px,env(safe-area-inset-bottom));left:12px;right:12px;display:flex;gap:8px;justify-content:center}button,a{border:0;border-radius:12px;background:#155ed1;color:white;padding:12px 16px;font:600 15px system-ui;text-decoration:none}#retry{margin:8px auto 0}#hint{position:fixed;z-index:10;bottom:75px;left:16px;right:16px;background:#000b;text-align:center;padding:9px;border-radius:10px;font-size:13px}</style></head><body>
+<div id="camera" aria-label="Camera view"></div><div id="statusBox" role="status" aria-live="polite"><span id="status">Opening camera. Allow camera access.</span><br><button id="retry" hidden>Try again</button></div>
+<div id="hint">Keep the card visible. Drag, pinch, or twist with two fingers.</div>
+<div id="tools"><button id="next" type="button" aria-label="Choose another model">↻ Another model</button><a href="../">Surface AR</a></div>
 <script type="module">
 import * as THREE from 'three';import {MindARThree} from 'mindar-image-three';import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-const container=document.querySelector('#camera'),msg=document.querySelector('#msg'),status=document.querySelector('#status'),retry=document.querySelector('#retry');
-const ar=new MindARThree({container,imageTargetSrc:'./targets.mind',uiLoading:'no',uiScanning:'no',uiError:'no'}),{renderer,scene,camera}=ar;
+const container=document.querySelector('#camera'),statusBox=document.querySelector('#statusBox'),status=document.querySelector('#status'),retry=document.querySelector('#retry');
+const ar=new MindARThree({container,imageTargetSrc:'./targets-v2.mind',maxTrack:1,missTolerance:8,warmupTolerance:3,uiLoading:'no',uiScanning:'no',uiError:'no'}),{renderer,scene,camera}=ar;
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.domElement.style.zIndex='1';ar.cssRenderer.domElement.style.zIndex='2';ar.cssRenderer.domElement.style.pointerEvents='none';
 scene.add(new THREE.HemisphereLight(0xffffff,0x888899,2));const light=new THREE.DirectionalLight(0xffffff,1);light.position.set(1,2,3);scene.add(light);
-const anchor=ar.addAnchor(0),rig=new THREE.Group();anchor.group.add(rig);const loader=new GLTFLoader(),clock=new THREE.Clock();let mixer=null, model=null,found=false,running=false,loading=false,generation=0;
-const choices=[{name:'Dog',path:'model.glb'},{name:'MetaScan character',path:'featured.glb'},{name:'Meta twin',path:'twin.glb'},{name:'Animated character',path:'animated.glb'}];let selected=0;
-function guide(){msg.hidden=found&&!loading;if(!found&&running)status.textContent='Point at the complete printed QR code.';else if(loading)status.textContent='Loading '+choices[selected].name+'…';}
-anchor.onTargetFound=()=>{found=true;guide()};anchor.onTargetLost=()=>{found=false;guide()};
-function dispose(root){root.traverse(o=>{if(o.isMesh){o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}}});}
-function load(index){selected=index;loading=true;const version=++generation;guide();loader.load(choices[index].path,gltf=>{if(version!==generation){dispose(gltf.scene);return}if(mixer)mixer.stopAllAction();if(model){rig.remove(model);dispose(model)}model=gltf.scene;
-// Measure each model in its glTF Y-up coordinates. The tracked card is one
-// unit wide; after rotating, model up becomes the card-normal (+Z).
-model.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(model,true);const height=bounds.max.y-bounds.min.y;
-if(!Number.isFinite(height)||height<.00001){loading=false;msg.hidden=false;status.textContent='Model size could not be measured. Choose another model.';return}
-const scale=.85/height;model.scale.setScalar(scale);model.rotation.x=Math.PI/2;model.position.z=.003-bounds.min.y*scale;
-rig.position.set(0,0,0);rig.rotation.set(0,0,0);rig.scale.setScalar(1);rig.add(model);mixer=gltf.animations.length?new THREE.AnimationMixer(model):null;if(mixer)gltf.animations.forEach(a=>mixer.clipAction(a).play());loading=false;guide()},undefined,()=>{if(version!==generation)return;loading=false;msg.hidden=false;status.textContent='Model could not load. Check your connection and tap ↻.'});}
+// MindAR hides its own anchors on loss. A separate root holds the last usable
+// anchor matrix in scene/camera coordinates; it is not a world-tracking pose.
+const poseRoot=new THREE.Group(),rig=new THREE.Group();poseRoot.visible=false;scene.add(poseRoot);poseRoot.add(rig);
+const anchors=[ar.addAnchor(0),ar.addAnchor(1)];
+const choices=[{name:'MetaScan character',path:'hand-scene.glb'},{name:'Dog',path:'model.glb'},{name:'Meta twin',path:'twin.glb'},{name:'Animated character',path:'animated.glb'}];
+const loader=new GLTFLoader(),clock=new THREE.Clock(),desiredPosition=new THREE.Vector3(),desiredRotation=new THREE.Quaternion(),desiredScale=new THREE.Vector3();
+let selected=0,model=null,modelBounds=null,mixer=null,loading=false,generation=0,running=false,hasPose=false,activeTarget=-1,trackingState='SEARCHING';
+const debugEvents=[];
+function record(state){if(trackingState===state)return;trackingState=state;if(new URLSearchParams(location.search).has('debug')){debugEvents.push({state,time:performance.now(),visible:poseRoot.visible,target:activeTarget});if(debugEvents.length>100)debugEvents.shift()}}
+if(new URLSearchParams(location.search).has('debug'))window.__metaScanDebug={get state(){return trackingState},get visible(){return poseRoot.visible},get target(){return activeTarget},get model(){return choices[selected].name},get position(){return poseRoot.position.toArray()},get meshCount(){let count=0;if(model)model.traverse(o=>{if(o.isMesh)count++});return count},get events(){return debugEvents.slice()}};
+function setModelScale(){if(!model||!modelBounds)return;const target=activeTarget<0?poseRoot.userData.target:activeTarget;const markerRatio=target===1?3.0:2.5;const height=modelBounds.max.y-modelBounds.min.y;const factor=markerRatio/height;model.scale.setScalar(factor);model.rotation.x=Math.PI/2;model.position.z=.003-modelBounds.min.y*factor;}
+function showStatus(){
+ statusBox.hidden=false;
+ if(loading){status.textContent='Loading '+choices[selected].name+'…';return}
+ if(!running){status.textContent='Opening camera. Allow camera access.';return}
+ if(!hasPose){status.textContent='Point at the complete printed card or QR code.';return}
+ if(trackingState==='LOST'){status.textContent='Tracking paused: holding the last view. Point back at the card.';return}
+ statusBox.hidden=true;
+}
+function receivePose(index){const anchor=anchors[index];if(!anchor.visible)return;
+ activeTarget=index;anchor.group.matrix.decompose(desiredPosition,desiredRotation,desiredScale);
+ if(!hasPose){poseRoot.position.copy(desiredPosition);poseRoot.quaternion.copy(desiredRotation);poseRoot.scale.copy(desiredScale);hasPose=true;poseRoot.visible=true;setModelScale();}
+ else if(poseRoot.userData.target!==index){setModelScale()}
+ poseRoot.userData.target=index;record('TRACKING');showStatus();
+}
+anchors.forEach((anchor,index)=>{
+ anchor.onTargetFound=()=>receivePose(index);
+ anchor.onTargetUpdate=()=>{if(anchor.visible)receivePose(index)};
+ anchor.onTargetLost=()=>{if(activeTarget===index){activeTarget=-1;record('LOST');showStatus()}};
+});
+function dispose(root){root.traverse(o=>{if(o.isMesh){o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose()}}});}
+function load(index){selected=index;loading=true;const version=++generation;showStatus();loader.load(choices[index].path,gltf=>{
+ if(version!==generation){dispose(gltf.scene);return}if(mixer)mixer.stopAllAction();if(model){rig.remove(model);dispose(model)}
+ model=gltf.scene;model.updateMatrixWorld(true);modelBounds=new THREE.Box3().setFromObject(model,true);const height=modelBounds.max.y-modelBounds.min.y;
+ if(!Number.isFinite(height)||height<.00001){loading=false;statusBox.hidden=false;status.textContent='Model size could not be measured. Choose another model.';return}
+ rig.position.set(0,0,0);rig.rotation.set(0,0,0);rig.scale.setScalar(1);setModelScale();rig.add(model);
+ mixer=gltf.animations.length?new THREE.AnimationMixer(model):null;if(mixer)gltf.animations.forEach(a=>mixer.clipAction(a).play());loading=false;showStatus();
+},undefined,()=>{if(version!==generation)return;loading=false;statusBox.hidden=false;status.textContent='Model could not load. Check your connection and tap ↻.'});}
 document.querySelector('#next').addEventListener('click',()=>{let n=Math.floor(Math.random()*(choices.length-1));if(n>=selected)n++;load(n)});
 const touches=new Map();let previousDistance=0,previousAngle=0;
 function distance(){const a=[...touches.values()];return a.length===2?Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y):0}
 function angle(){const a=[...touches.values()];return a.length===2?Math.atan2(a[1].y-a[0].y,a[1].x-a[0].x):0}
 container.addEventListener('pointerdown',e=>{touches.set(e.pointerId,{x:e.clientX,y:e.clientY});container.setPointerCapture(e.pointerId);previousDistance=distance();previousAngle=angle()});
-container.addEventListener('pointermove',e=>{if(!touches.has(e.pointerId))return;const last=touches.get(e.pointerId);touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(!found)return;if(touches.size===1){rig.position.x+=(e.clientX-last.x)/container.clientWidth;rig.position.y-=(e.clientY-last.y)/container.clientHeight}else if(touches.size===2){const d=distance(),a=angle();if(previousDistance>0){const scale=THREE.MathUtils.clamp(rig.scale.x*d/previousDistance,.4,4);rig.scale.setScalar(scale);rig.rotation.z-=Math.atan2(Math.sin(a-previousAngle),Math.cos(a-previousAngle))}previousDistance=d;previousAngle=a}});
+container.addEventListener('pointermove',e=>{if(!touches.has(e.pointerId))return;const last=touches.get(e.pointerId);touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(!hasPose)return;if(touches.size===1){rig.position.x+=(e.clientX-last.x)/container.clientWidth;rig.position.y-=(e.clientY-last.y)/container.clientHeight}else if(touches.size===2){const d=distance(),a=angle();if(previousDistance>0){const scale=THREE.MathUtils.clamp(rig.scale.x*d/previousDistance,.2,12);rig.scale.setScalar(scale);rig.rotation.z-=Math.atan2(Math.sin(a-previousAngle),Math.cos(a-previousAngle))}previousDistance=d;previousAngle=a}});
 function release(e){touches.delete(e.pointerId);previousDistance=distance();previousAngle=angle()}container.addEventListener('pointerup',release);container.addEventListener('pointercancel',release);
-async function start(){try{const promise=ar.start();if(ar.video)ar.video.style.zIndex='0';await promise;running=true;renderer.setAnimationLoop(()=>{const delta=clock.getDelta();if(mixer)mixer.update(delta);renderer.render(scene,camera)});guide()}catch(e){console.error(e);status.textContent='Camera unavailable. Allow access in Safari and retry.';retry.hidden=false}}
+async function start(){try{const promise=ar.start();if(ar.video)ar.video.style.zIndex='0';await promise;running=true;renderer.setAnimationLoop(()=>{
+ const delta=Math.min(clock.getDelta(),.1);
+ if(hasPose&&trackingState==='TRACKING'){const amount=1-Math.exp(-12*delta);poseRoot.position.lerp(desiredPosition,amount);poseRoot.quaternion.slerp(desiredRotation,amount);poseRoot.scale.lerp(desiredScale,amount)}
+ if(mixer)mixer.update(delta);renderer.render(scene,camera);
+ });showStatus()}catch(e){console.error(e);statusBox.hidden=false;status.textContent='Camera unavailable. Allow access in Safari and retry.';retry.hidden=false}}
 retry.addEventListener('click',()=>location.reload());window.addEventListener('pagehide',()=>{if(running){renderer.setAnimationLoop(null);try{ar.stop()}catch(e){}running=false}});window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});load(0);start();
 </script></body></html>
