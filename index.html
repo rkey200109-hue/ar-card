@@ -1,13 +1,1 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>META SCAN AR</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080b18;color:white;font:18px system-ui;text-align:center}main{padding:28px;max-width:430px}img{width:200px}a{display:block;background:#185de8;color:white;padding:18px;border-radius:14px;text-decoration:none;font-weight:700}a img{width:24px;vertical-align:middle;margin-right:8px}p{line-height:1.5;color:#c2c8dd}</style></head>
-<body><main><img src="metascan_logo.png" alt="MetaScan"><h1>META SCAN AR</h1>
-<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.2.0/model-viewer.min.js"></script>
-<model-viewer id="viewer" src="model-preview.glb" ios-src="model-desktop-5inch.usdz" ar ar-modes="webxr scene-viewer quick-look" camera-controls touch-action="pan-y" alt="MetaScan character with logo behind her back" style="display:block;width:100%;height:340px;background:#11162a;border-radius:16px">
-<button slot="ar-button" style="position:absolute;bottom:16px;left:10%;width:80%;padding:16px;background:#185de8;color:white;border:0;border-radius:12px;font:700 17px system-ui">Place in your space</button>
-</model-viewer>
-<p id="help">Drag to inspect the model in 3D. Tap Place in your space for AR on supported devices.</p>
-<p>In AR: pinch to resize, use two fingers to rotate, and drag to move.</p>
-<p id="fallback" hidden>If AR does not open here, open this page in Safari on iPhone. You can still explore the model above without downloading a file.</p>
-<script>const v=document.querySelector('#viewer');v.addEventListener('ar-status',e=>{if(e.detail.status==='failed')document.querySelector('#fallback').hidden=false;});customElements.whenDefined('model-viewer').then(()=>{if(!v.canActivateAR)document.querySelector('#fallback').hidden=false;});document.querySelector('#fallback').hidden=false;</script>
-</main></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>META SCAN AR</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#080b18;color:white;font:18px system-ui;text-align:center}main{padding:28px;max-width:430px}img{width:200px}a{display:block;background:#185de8;color:white;padding:18px;border-radius:14px;text-decoration:none;font-weight:700}a img{width:24px;vertical-align:middle;margin-right:8px}p{line-height:1.5;color:#c2c8dd}</style></head><body><main><img src="metascan_logo.png" alt="MetaScan"><h1>META SCAN AR</h1><a rel="ar" href="model-solid-3d.usdz#allowsContentScaling=1"><img src="metascan_logo.png" alt="">Place in your space</a><p>Open in Safari on iPhone. Move your phone slowly to find a desk or floor.</p><p>Pinch to resize · Use two fingers to rotate · Drag to move</p></main></body></html>
