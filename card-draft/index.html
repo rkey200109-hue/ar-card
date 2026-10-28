@@ -15,7 +15,13 @@ const choices=[{name:'Dog',path:'model.glb'},{name:'MetaScan character',path:'fe
 function guide(){msg.hidden=found&&!loading;if(!found&&running)status.textContent='Point at the complete printed QR code.';else if(loading)status.textContent='Loading '+choices[selected].name+'…';}
 anchor.onTargetFound=()=>{found=true;guide()};anchor.onTargetLost=()=>{found=false;guide()};
 function dispose(root){root.traverse(o=>{if(o.isMesh){o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}}});}
-function load(index){selected=index;loading=true;const version=++generation;guide();loader.load(choices[index].path,gltf=>{if(version!==generation){dispose(gltf.scene);return}if(mixer)mixer.stopAllAction();if(model){rig.remove(model);dispose(model)}model=gltf.scene;model.scale.setScalar(5);model.rotation.x=Math.PI/2;rig.position.set(0,0,.003);rig.rotation.set(0,0,0);rig.scale.setScalar(1);rig.add(model);mixer=gltf.animations.length?new THREE.AnimationMixer(model):null;if(mixer)gltf.animations.forEach(a=>mixer.clipAction(a).play());loading=false;guide()},undefined,()=>{if(version!==generation)return;loading=false;msg.hidden=false;status.textContent='Model could not load. Check your connection and tap ↻.'});}
+function load(index){selected=index;loading=true;const version=++generation;guide();loader.load(choices[index].path,gltf=>{if(version!==generation){dispose(gltf.scene);return}if(mixer)mixer.stopAllAction();if(model){rig.remove(model);dispose(model)}model=gltf.scene;
+// Measure each model in its glTF Y-up coordinates. The tracked card is one
+// unit wide; after rotating, model up becomes the card-normal (+Z).
+model.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(model,true);const height=bounds.max.y-bounds.min.y;
+if(!Number.isFinite(height)||height<.00001){loading=false;msg.hidden=false;status.textContent='Model size could not be measured. Choose another model.';return}
+const scale=.85/height;model.scale.setScalar(scale);model.rotation.x=Math.PI/2;model.position.z=.003-bounds.min.y*scale;
+rig.position.set(0,0,0);rig.rotation.set(0,0,0);rig.scale.setScalar(1);rig.add(model);mixer=gltf.animations.length?new THREE.AnimationMixer(model):null;if(mixer)gltf.animations.forEach(a=>mixer.clipAction(a).play());loading=false;guide()},undefined,()=>{if(version!==generation)return;loading=false;msg.hidden=false;status.textContent='Model could not load. Check your connection and tap ↻.'});}
 document.querySelector('#next').addEventListener('click',()=>{let n=Math.floor(Math.random()*(choices.length-1));if(n>=selected)n++;load(n)});
 const touches=new Map();let previousDistance=0,previousAngle=0;
 function distance(){const a=[...touches.values()];return a.length===2?Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y):0}
