@@ -1,80 +1,37 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>MetaScan VIO experiment</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#070913"><title>MetaScan AR</title>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","mindar-image-three":"https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"}}</script>
-<script src="./tinyvio-slam.js"></script>
-<style>html,body,#camera{margin:0;width:100%;height:100%;overflow:hidden;background:#10121a;color:white;font:15px system-ui}#camera{position:relative;touch-action:none}#status{position:fixed;z-index:3;top:10px;left:10px;right:10px;background:#000b;padding:12px;border-radius:10px;text-align:center}#buttons{position:fixed;z-index:3;bottom:20px;left:10px;right:10px;display:flex;gap:8px;justify-content:center}button{border:0;border-radius:12px;padding:12px;background:#155ed1;color:white;font:600 15px system-ui}button:disabled{opacity:.5}</style></head>
-<body><div id="camera"></div><div id="status" role="status">Experimental: allow camera and motion access to start.</div><div id="buttons"><button id="start">Start experiment</button><button id="place" disabled>Place in room</button></div>
+<style>
+html,body,#camera{margin:0;width:100%;height:100%;overflow:hidden}body{background:#090d19;color:#fff;font:15px system-ui,-apple-system,sans-serif}#camera{position:relative;isolation:isolate}#status{position:fixed;z-index:5;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;background:#000c;border-radius:12px;padding:12px;text-align:center;line-height:1.4}#actions{position:fixed;z-index:6;bottom:max(18px,env(safe-area-inset-bottom));left:12px;right:12px;display:flex;flex-direction:column;align-items:center;gap:10px}#hint{margin:0;max-width:400px;background:#000c;border-radius:10px;padding:10px 14px;text-align:center}a,button{border:0;border-radius:12px;background:#145ed2;color:white;padding:15px 20px;font:700 16px system-ui;text-decoration:none;text-align:center}#native img{position:absolute;width:1px;height:1px;opacity:.01}#native::after{content:'Place Model in Room (360° AR)'}#restart{font-size:14px;padding:8px 14px;background:#354261}#android[hidden],#native[hidden],#restart[hidden]{display:none}
+</style></head><body>
+<div id="camera" aria-label="Card scanner camera"></div>
+<div id="status" role="status" aria-live="polite">Opening camera. Allow camera access, then point at your card.</div>
+<div id="actions"><p id="hint">Tap Place Model in Room to view the character in your space and walk around it.</p>
+<a id="native" rel="ar" href="./character.usdz#allowsContentScaling=1" aria-label="Place Model in Room, 360 degree AR"><img src="../../random-featured.png" alt=""></a>
+<a id="android" href="./android-ar.html" hidden>Place Model in Room (360° AR)</a>
+<button id="restart" type="button" hidden>Restart camera</button></div>
 <script type="module">
 import * as THREE from 'three';
 import {MindARThree} from 'mindar-image-three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-
-// This is an experiment, not the published AR experience. Both trackers consume
-// the same MindAR video; neither the VIO stream nor its pose goes over a network.
-const ASSETS='https://rkey200109-hue.github.io/ar-card/card-draft/';
-const status=document.querySelector('#status'), startButton=document.querySelector('#start'),placeButton=document.querySelector('#place');
+const status=document.querySelector('#status'),native=document.querySelector('#native'),android=document.querySelector('#android'),restart=document.querySelector('#restart');
+const isAndroid=/Android/i.test(navigator.userAgent);if(isAndroid){native.hidden=true;android.hidden=false}
 const ar=new MindARThree({container:document.querySelector('#camera'),imageTargetSrc:'./targets-vio.mind',maxTrack:1,missTolerance:3,warmupTolerance:1,uiLoading:'no',uiScanning:'no',uiError:'no'});
-const {renderer,scene,camera}=ar;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.domElement.style.zIndex='1';ar.cssRenderer.domElement.style.pointerEvents='none';ar.cssRenderer.domElement.style.zIndex='2';
-scene.add(new THREE.HemisphereLight(0xffffff,0x888899,2));const sun=new THREE.DirectionalLight(0xffffff,1);sun.position.set(1,2,3);scene.add(sun);
-const anchors=[0,1,2,3].map(i=>ar.addAnchor(i));const root=new THREE.Group();root.matrixAutoUpdate=false;root.visible=false;scene.add(root);
-const initialCamera=new THREE.Matrix4(),worldTarget=new THREE.Matrix4(),worldCamera=new THREE.Matrix4(),cameraFromWorld=new THREE.Matrix4(),worldRotation=new THREE.Quaternion(),trackerRotation=new THREE.Quaternion();
-const worldPosition=new THREE.Vector3(),unitScale=new THREE.Vector3(1,1,1),frameQ=new THREE.Quaternion(-Math.SQRT1_2,0,0,Math.SQRT1_2),cameraFlip=new THREE.Quaternion(1,0,0,0);
-let model=null,bounds=null,active=-1,mode='searching',engine=null,wasm=null,ctx=null,gray=null,width=0,height=0,ready=false,confidence=0,lastFrame=-1,imuCount=0,frameCount=0,modelLoaded=false;
-let positionPerMeter=1;const physWidths=[.0508,.0508,.042333,.0508];
-const debug={get mode(){return mode},get ready(){return ready},get confidence(){return confidence},get hasConfidence(){return typeof engine?.poseConfidence==='function'},get imuCount(){return imuCount},get frameCount(){return frameCount},get engineStatus(){return engine?.getStatus()??null},get modelLoaded(){return modelLoaded},get active(){return active},get visible(){return root.visible},get pose(){return root.matrix.toArray()},get camera(){return worldCamera.toArray()}};
-if(new URLSearchParams(location.search).has('debug'))window.__vioDebug=debug;
-if(new URLSearchParams(location.search).has('selftest'))Object.assign(debug,{
- halt(){renderer.setAnimationLoop(null)},
- setTestCamera(x,y,z,angle){worldCamera.compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),angle),unitScale);ready=true;updateStatus()},
- step(){updateWorldPose()},
- getWorldTarget(){return worldTarget.toArray()}
+const {renderer,scene,camera}=ar;
+renderer.domElement.style.zIndex='1';ar.cssRenderer.domElement.style.zIndex='2';ar.cssRenderer.domElement.style.pointerEvents='none';
+let running=false,found=-1;
+const anchors=[0,1,2,3].map(i=>ar.addAnchor(i));
+const outlineGeometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.5,-.5,.003),new THREE.Vector3(.5,-.5,.003),new THREE.Vector3(.5,.5,.003),new THREE.Vector3(-.5,.5,.003)]);
+anchors.forEach((anchor,i)=>{
+ const outline=new THREE.LineLoop(outlineGeometry,new THREE.LineBasicMaterial({color:0x42dcff,depthTest:false}));anchor.group.add(outline);
+ anchor.onTargetFound=()=>{found=i;status.textContent='Card found. Tap Place Model in Room to open AR.'};
+ anchor.onTargetLost=()=>{if(found===i){found=-1;status.textContent='Point at your card, or tap Place Model in Room to continue.'}};
 });
-
-function fitModel(index){if(!model||!bounds)return;const ratio=index===2?3:2.5;const s=ratio/(bounds.max.y-bounds.min.y);model.scale.setScalar(s);model.rotation.x=Math.PI/2;model.position.set(0,0,.003-bounds.min.y*s)}
-new GLTFLoader().load(ASSETS+'hand-scene.glb',g=>{model=g.scene;bounds=new THREE.Box3().setFromObject(model,true);if(!(bounds.max.y>bounds.min.y)){status.textContent='Model bounds unavailable.';return}fitModel(0);root.add(model);modelLoaded=true;},undefined,()=>{status.textContent='Could not load the character.'});
-function updateStatus(){
- placeButton.disabled=!(mode==='card'&&active>=0&&ready&&modelLoaded);
- if(mode==='world'){status.textContent=ready?'Room placement experiment: walk slowly around the model.':'World tracking paused; move back toward a detailed, well-lit area.';return}
- if(active<0){status.textContent='Point at the complete printed card; move your phone slowly to initialize tracking.';return}
- status.textContent=ready?'Card found. Tap Place in room to try walking around it.':'Card found. Slowly move your phone to initialize room tracking.';
-}
-anchors.forEach((a,i)=>{a.onTargetUpdate=()=>{if(!a.visible||mode==='world')return;active=i;mode='card';fitModel(i);positionPerMeter=ar.controller.markerDimensions[i][0]/physWidths[i];root.matrix.copy(a.group.matrix);root.visible=true;updateStatus()};a.onTargetLost=()=>{if(mode!=='world'&&active===i){active=-1;updateStatus()}}});
-function feedMotion(e){if(!engine)return;const a=e.accelerationIncludingGravity,r=e.rotationRate;if(!a||!r)return;const d=Math.PI/180;engine.feedImu(performance.now()/1000,a.x||0,a.y||0,a.z||0,-(r.beta||0)*d,(r.gamma||0)*d,(r.alpha||0)*d);imuCount++}
-async function initVio(){
- if(typeof SlamModule!=='function')throw Error('Tracking engine did not load');
- wasm=await SlamModule({locateFile:file=>new URL(file,location.href).href});engine=new wasm.SlamEngine();
- const video=ar.video,scale=Math.min(1,640/Math.max(video.videoWidth,video.videoHeight));width=Math.max(1,Math.round(video.videoWidth*scale));height=Math.max(1,Math.round(video.videoHeight*scale));
- // Match MindAR's 45-degree vertical-FOV approximation. Real camera intrinsics
- // are unavailable here; both trackers can therefore have systematic error.
- const f=height/2/Math.tan(Math.PI/8);engine.configure(f,f,width/2,height/2,width,height,0,0,0,0,15,.005,.05,.0005,.01,8,15,5,0,0,0,1);engine.start();
- const c=document.createElement('canvas');c.width=width;c.height=height;ctx=c.getContext('2d',{willReadFrequently:true});gray=new Uint8Array(width*height);window.addEventListener('devicemotion',feedMotion);
-}
-function tickVio(){
- if(!engine||ar.video.readyState<2||ar.video.currentTime===lastFrame)return;lastFrame=ar.video.currentTime;
- ctx.drawImage(ar.video,0,0,width,height);const rgba=ctx.getImageData(0,0,width,height).data;
- for(let i=0;i<gray.length;i++){const p=i*4;gray[i]=(rgba[p]*77+rgba[p+1]*150+rgba[p+2]*29)>>8}
- const ptr=engine.allocFrameBuffer(gray.length);wasm.HEAPU8.set(gray,ptr);if(engine.processFrame(width,height,width,performance.now()/1000)!==0){ready=false;updateStatus();return}frameCount++;
- confidence=engine.poseConfidence?engine.poseConfidence():0;ready=engine.getStatus()===2&&confidence===3;
- if(!ready){updateStatus();return}
- worldPosition.set(engine.posePx(),engine.posePy(),engine.posePz()).applyQuaternion(frameQ).multiplyScalar(positionPerMeter);
- trackerRotation.set(engine.poseQx(),engine.poseQy(),engine.poseQz(),engine.poseQw());worldRotation.copy(frameQ).multiply(trackerRotation).multiply(cameraFlip).normalize();
- worldCamera.compose(worldPosition,worldRotation,unitScale);updateStatus();
-}
-placeButton.addEventListener('click',()=>{
- if(!ready||active<0||!root.visible)return;
- // worldFromTarget = worldFromCamera * cameraFromTarget. The inverse operation
- // on each VIO pose brings it back into MindAR's fixed camera coordinate frame.
- initialCamera.copy(worldCamera);worldTarget.multiplyMatrices(initialCamera,root.matrix);mode='world';placeButton.disabled=true;updateStatus();
-});
-function updateWorldPose(){if(mode==='world'&&ready){cameraFromWorld.copy(worldCamera).invert();root.matrix.multiplyMatrices(cameraFromWorld,worldTarget)}}
-startButton.addEventListener('click',async()=>{
- startButton.disabled=true;
- try{
-  if(!window.DeviceMotionEvent)throw Error('Motion sensors unavailable');
-  if(typeof DeviceMotionEvent.requestPermission==='function'&&(await DeviceMotionEvent.requestPermission())!=='granted')throw Error('Motion permission not granted');
-  await ar.start();ar.video.style.zIndex='0';await initVio();startButton.remove();
-  renderer.setAnimationLoop(()=>{tickVio();updateWorldPose();renderer.render(scene,camera)});updateStatus();
- }catch(e){window.removeEventListener('devicemotion',feedMotion);if(engine){try{engine.stop();engine.delete()}catch{}engine=null}try{ar.controller?.stopProcessVideo();ar.video?.srcObject?.getTracks().forEach(t=>t.stop());ar.video?.remove()}catch{}status.textContent='Could not start experiment: '+e.message;startButton.disabled=false}
-});
-window.addEventListener('pagehide',()=>{window.removeEventListener('devicemotion',feedMotion);renderer.setAnimationLoop(null);if(engine){try{engine.stop();engine.delete()}catch{}}try{ar.stop()}catch{}});
+if(new URLSearchParams(location.search).has('debug'))window.__scannerDebug={get target(){return found},get running(){return running}};
+function stopScanner(){if(!running)return;renderer.setAnimationLoop(null);try{ar.stop()}catch(e){console.warn('Camera shutdown:',e)}running=false}
+native.addEventListener('click',()=>{stopScanner();status.textContent='Opening Apple AR. When you return, tap Restart camera to scan again.';restart.hidden=false});
+restart.addEventListener('click',()=>location.reload());
+window.addEventListener('pagehide',stopScanner);
+window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
+async function start(){try{await ar.start();ar.video.style.zIndex='0';running=true;renderer.setAnimationLoop(()=>renderer.render(scene,camera));status.textContent='Point at your card, or tap Place Model in Room to continue.'}catch(e){console.error(e);status.textContent='Camera unavailable. You can still tap Place Model in Room. For iPhone, open this page in Safari.';restart.hidden=false}}
+start();
 </script></body></html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080c18">
+  <title>MetaScan AR</title>
+  <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}
+    body{background:#080c18;color:white;font:16px system-ui,sans-serif}
+    canvas{position:absolute;inset:0;display:block}
+    #message{position:fixed;z-index:2;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;padding:12px;text-align:center;background:#000b;border-radius:12px;line-height:1.35;pointer-events:none}
+    #controls{position:fixed;z-index:2;bottom:90px;left:12px;right:12px;display:flex;gap:8px;justify-content:center}
+    #controls[hidden]{display:none}button{background:#155ed1;color:white;border:0;border-radius:10px;padding:10px 17px;font:600 15px system-ui}
+  </style>
+</head>
+<body>
+  <div id="message" role="status" aria-live="polite">Preparing the model…</div>
+  <div id="controls" hidden><button id="smaller" type="button" aria-label="Make model smaller">−</button><button id="larger" type="button" aria-label="Make model larger">+</button><button id="rotate" type="button" aria-label="Rotate model">↻</button></div>
+  <script type="module">
+    import * as THREE from 'three';
+    import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+    import {ARButton} from 'three/addons/webxr/ARButton.js';
+
+    const message=document.querySelector('#message'),controls=document.querySelector('#controls');
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.setSize(innerWidth,innerHeight);
+    renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.xr.enabled=true;document.body.prepend(renderer.domElement);
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.01,100);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x777788,2));
+    const light=new THREE.DirectionalLight(0xffffff,1);light.position.set(1,2,3);scene.add(light);
+
+    const reticle=new THREE.Mesh(new THREE.RingGeometry(.035,.045,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x38a6ff}));
+    reticle.matrixAutoUpdate=false;reticle.visible=false;scene.add(reticle);
+    const placement=new THREE.Group();placement.visible=false;scene.add(placement);
+    let model=null,hitSource=null,hitSourceRequested=false,sessionGeneration=0,placed=false;
+    const controller=renderer.xr.getController(0);scene.add(controller);
+    controller.addEventListener('select',()=>{
+      if(!reticle.visible||!model)return;
+      reticle.matrix.decompose(placement.position,placement.quaternion,new THREE.Vector3());
+      placement.visible=true;placed=true;message.textContent='Walk around the model. Tap another surface to move it.';
+    });
+    for(const [id,ratio] of [['smaller',1/1.25],['larger',1.25]]){
+      const button=document.querySelector('#'+id);
+      button.addEventListener('beforexrselect',event=>event.preventDefault());
+      button.addEventListener('click',()=>{const value=THREE.MathUtils.clamp(placement.scale.x*ratio,1,12);placement.scale.setScalar(value)});
+    }
+    const rotateButton=document.querySelector('#rotate');
+    rotateButton.addEventListener('beforexrselect',event=>event.preventDefault());
+    rotateButton.addEventListener('click',()=>placement.rotateY(Math.PI/4));
+    window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+    renderer.xr.addEventListener('sessionstart',()=>{sessionGeneration++;hitSource=null;hitSourceRequested=false;placed=false;placement.visible=false;controls.hidden=false;message.textContent='Move your phone slowly over a flat surface. Tap when the circle appears.'});
+    renderer.xr.addEventListener('sessionend',()=>{sessionGeneration++;hitSource?.cancel();hitSource=null;hitSourceRequested=false;reticle.visible=false;controls.hidden=true;message.textContent='Tap Start AR to place the model again.'});
+
+    function render(_time,frame){
+      if(frame){
+        const session=renderer.xr.getSession(),referenceSpace=renderer.xr.getReferenceSpace();
+        if(!hitSourceRequested){
+          hitSourceRequested=true;const generation=sessionGeneration;
+          session.requestReferenceSpace('viewer').then(space=>session.requestHitTestSource({space})).then(source=>{
+            if(generation!==sessionGeneration){source.cancel();return}hitSource=source;
+          }).catch(()=>{if(generation===sessionGeneration)message.textContent='Surface detection is unavailable on this device.'});
+        }
+        if(hitSource){const hits=frame.getHitTestResults(hitSource);if(hits.length){const pose=hits[0].getPose(referenceSpace);reticle.visible=!!pose;if(pose)reticle.matrix.fromArray(pose.transform.matrix)}else reticle.visible=false}
+      }
+      renderer.render(scene,camera);
+    }
+
+    async function prepare(){
+      if(!navigator.xr||!(await navigator.xr.isSessionSupported('immersive-ar'))){message.textContent='AR is not supported by this browser. Try Chrome on an Android device that supports AR.';return}
+      const gltf=await new GLTFLoader().loadAsync('../hand-scene.glb');
+      model=gltf.scene;model.updateMatrixWorld(true);
+      const body=model.getObjectByName('Mesh_0_Part_0')||model;
+      const bounds=new THREE.Box3().setFromObject(body,true),height=bounds.max.y-bounds.min.y;
+      if(!Number.isFinite(height)||height<.00001)throw new Error('Model dimensions unavailable');
+      const factor=.127/height,center=bounds.getCenter(new THREE.Vector3());
+      model.scale.setScalar(factor);model.position.set(-center.x*factor,-bounds.min.y*factor,-center.z*factor);
+      placement.add(model);
+      if(new URLSearchParams(location.search).has('debug'))window.__surfaceDebug={get modelLoaded(){return !!model},get height(){return height*factor},get foot(){return bounds.min.y*factor+model.position.y},get placed(){return placed}};
+      document.body.appendChild(ARButton.createButton(renderer,{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay'],domOverlay:{root:document.body}}));
+      message.textContent='Tap Start AR, then point at a flat surface.';renderer.setAnimationLoop(render);
+    }
+    prepare().catch(error=>{console.error(error);message.textContent='Could not start AR. Check your connection and try again.'});
+  </script>
+</body>
+</html>
