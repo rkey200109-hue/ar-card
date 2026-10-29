@@ -13,14 +13,14 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 // the same MindAR video; neither the VIO stream nor its pose goes over a network.
 const ASSETS='https://rkey200109-hue.github.io/ar-card/card-draft/';
 const status=document.querySelector('#status'), startButton=document.querySelector('#start'),placeButton=document.querySelector('#place');
-const ar=new MindARThree({container:document.querySelector('#camera'),imageTargetSrc:ASSETS+'targets-v3.mind',maxTrack:1,missTolerance:3,warmupTolerance:1,uiLoading:'no',uiScanning:'no',uiError:'no'});
+const ar=new MindARThree({container:document.querySelector('#camera'),imageTargetSrc:'./targets-vio.mind',maxTrack:1,missTolerance:3,warmupTolerance:1,uiLoading:'no',uiScanning:'no',uiError:'no'});
 const {renderer,scene,camera}=ar;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.domElement.style.zIndex='1';ar.cssRenderer.domElement.style.pointerEvents='none';ar.cssRenderer.domElement.style.zIndex='2';
 scene.add(new THREE.HemisphereLight(0xffffff,0x888899,2));const sun=new THREE.DirectionalLight(0xffffff,1);sun.position.set(1,2,3);scene.add(sun);
-const anchors=[0,1,2].map(i=>ar.addAnchor(i));const root=new THREE.Group();root.matrixAutoUpdate=false;root.visible=false;scene.add(root);
+const anchors=[0,1,2,3].map(i=>ar.addAnchor(i));const root=new THREE.Group();root.matrixAutoUpdate=false;root.visible=false;scene.add(root);
 const initialCamera=new THREE.Matrix4(),worldTarget=new THREE.Matrix4(),worldCamera=new THREE.Matrix4(),cameraFromWorld=new THREE.Matrix4(),worldRotation=new THREE.Quaternion(),trackerRotation=new THREE.Quaternion();
 const worldPosition=new THREE.Vector3(),unitScale=new THREE.Vector3(1,1,1),frameQ=new THREE.Quaternion(-Math.SQRT1_2,0,0,Math.SQRT1_2),cameraFlip=new THREE.Quaternion(1,0,0,0);
 let model=null,bounds=null,active=-1,mode='searching',engine=null,wasm=null,ctx=null,gray=null,width=0,height=0,ready=false,confidence=0,lastFrame=-1,imuCount=0,frameCount=0,modelLoaded=false;
-let positionPerMeter=1;const physWidths=[.0508,.0508,.042333];
+let positionPerMeter=1;const physWidths=[.0508,.0508,.042333,.0508];
 const debug={get mode(){return mode},get ready(){return ready},get confidence(){return confidence},get hasConfidence(){return typeof engine?.poseConfidence==='function'},get imuCount(){return imuCount},get frameCount(){return frameCount},get engineStatus(){return engine?.getStatus()??null},get modelLoaded(){return modelLoaded},get active(){return active},get visible(){return root.visible},get pose(){return root.matrix.toArray()},get camera(){return worldCamera.toArray()}};
 if(new URLSearchParams(location.search).has('debug'))window.__vioDebug=debug;
 if(new URLSearchParams(location.search).has('selftest'))Object.assign(debug,{
