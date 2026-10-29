@@ -1,9 +1,9 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#070913"><title>MetaScan AR</title>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/","mindar-image-three":"https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"}}</script>
-<style>html,body,#camera{margin:0;width:100%;height:100%;overflow:hidden}body{background:#070913;color:white;font:15px system-ui,sans-serif}#camera{position:relative;isolation:isolate;touch-action:none}#statusBox{position:fixed;z-index:10;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;text-align:center;padding:11px;border-radius:12px;background:#000b;line-height:1.4}#tools{position:fixed;z-index:11;bottom:max(14px,env(safe-area-inset-bottom));left:12px;right:12px;display:flex;gap:8px;justify-content:center}button,a{border:0;border-radius:12px;background:#155ed1;color:white;padding:12px 16px;font:600 15px system-ui;text-decoration:none}#retry{margin:8px auto 0}#hint{position:fixed;z-index:10;bottom:75px;left:16px;right:16px;background:#000b;text-align:center;padding:9px;border-radius:10px;font-size:13px}</style></head><body>
+<style>html,body,#camera{margin:0;width:100%;height:100%;overflow:hidden}body{background:#070913;color:white;font:15px system-ui,sans-serif}#camera{position:relative;isolation:isolate;touch-action:none}#statusBox{position:fixed;z-index:10;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;text-align:center;padding:11px;border-radius:12px;background:#000b;line-height:1.4}#tools{position:fixed;z-index:11;bottom:max(14px,env(safe-area-inset-bottom));left:12px;right:12px;display:flex;gap:8px;justify-content:center}button,a{border:0;border-radius:12px;background:#155ed1;color:white;padding:12px 16px;font:600 15px system-ui;text-decoration:none}#surface img{position:absolute;width:1px;height:1px;opacity:.01}#surface::after{content:'Walk around in AR'}#retry{margin:8px auto 0}#hint{position:fixed;z-index:10;bottom:75px;left:16px;right:16px;background:#000b;text-align:center;padding:9px;border-radius:10px;font-size:13px}</style></head><body>
 <div id="camera" aria-label="Camera view"></div><div id="statusBox" role="status" aria-live="polite"><span id="status">Opening camera. Allow camera access.</span><br><button id="retry" hidden>Try again</button></div>
-<div id="hint">Keep the card visible. Drag, pinch, or twist with two fingers.</div>
-<div id="tools"><button id="next" type="button" aria-label="Choose another model">↻ Another model</button><a href="../">Surface AR</a></div>
+<div id="hint">Keep the card visible to track it. To walk around, tap Walk around in AR.</div>
+<div id="tools"><button id="next" type="button" aria-label="Choose another model">↻ Another model</button><a id="surface" rel="ar" href="hand-scene.usdz#allowsContentScaling=1" aria-label="Walk around the selected model in AR"><img src="../random-featured.png" alt=""></a></div>
 <script type="module">
 import * as THREE from 'three';import {MindARThree} from 'mindar-image-three';import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const container=document.querySelector('#camera'),statusBox=document.querySelector('#statusBox'),status=document.querySelector('#status'),retry=document.querySelector('#retry');
@@ -14,7 +14,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0x888899,2));const light=new THREE.
 // anchor matrix in scene/camera coordinates; it is not a world-tracking pose.
 const poseRoot=new THREE.Group(),rig=new THREE.Group();poseRoot.visible=false;scene.add(poseRoot);poseRoot.add(rig);
 const anchors=[ar.addAnchor(0),ar.addAnchor(1),ar.addAnchor(2)];
-const choices=[{name:'MetaScan character',path:'hand-scene.glb'},{name:'Dog',path:'model.glb'},{name:'Meta twin',path:'twin.glb'},{name:'Animated character',path:'animated.glb'}];
+const choices=[{name:'MetaScan character',path:'hand-scene.glb',usdz:'hand-scene.usdz',image:'../random-featured.png'},{name:'Dog',path:'model.glb',usdz:'../random-dog.usdz',image:'../random-dog.png'},{name:'Meta twin',path:'twin.glb',usdz:'../random-twin.usdz',image:'../random-twin.png'},{name:'Animated character',path:'animated.glb',usdz:'../random-animated.usdz',image:'../random-animated.png'}];
 const loader=new GLTFLoader(),clock=new THREE.Clock(),desiredPosition=new THREE.Vector3(),desiredRotation=new THREE.Quaternion(),desiredScale=new THREE.Vector3();
 let selected=0,model=null,modelBounds=null,mixer=null,loading=false,generation=0,running=false,hasPose=false,activeTarget=-1,trackingState='SEARCHING';
 const debugEvents=[];
@@ -45,7 +45,6 @@ function showStatus(){
  if(loading){status.textContent='Loading '+choices[selected].name+'…';return}
  if(!running){status.textContent='Opening camera. Allow camera access.';return}
  if(!hasPose){status.textContent='Point at the complete printed card or QR code.';return}
- if(trackingState==='EXTRAPOLATING'||trackingState==='LOST'){status.textContent='Tracking paused. Point back at the card.';return}
  statusBox.hidden=true;
 }
 function receivePose(index){const anchor=anchors[index];if(!anchor.visible)return;
@@ -61,7 +60,7 @@ anchors.forEach((anchor,index)=>{
  anchor.onTargetLost=()=>{if(activeTarget===index){activeTarget=-1;lossTime=performance.now();lossPosition.copy(poseRoot.position);lossRotation.copy(poseRoot.quaternion);lossVelocity.copy(velocity);lossAngular=angularSpeed;record('EXTRAPOLATING');showStatus()}};
 });
 function dispose(root){root.traverse(o=>{if(o.isMesh){o.geometry?.dispose();for(const m of (Array.isArray(o.material)?o.material:[o.material])){if(!m)continue;for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose()}}});}
-function load(index){selected=index;loading=true;const version=++generation;showStatus();loader.load(choices[index].path,gltf=>{
+function load(index){selected=index;const surface=document.querySelector('#surface');surface.href=choices[index].usdz+'#allowsContentScaling=1';surface.querySelector('img').src=choices[index].image;loading=true;const version=++generation;showStatus();loader.load(choices[index].path,gltf=>{
  if(version!==generation){dispose(gltf.scene);return}if(mixer)mixer.stopAllAction();if(model){rig.remove(model);dispose(model)}
  model=gltf.scene;model.updateMatrixWorld(true);modelBounds=new THREE.Box3().setFromObject(model,true);const height=modelBounds.max.y-modelBounds.min.y;
  if(!Number.isFinite(height)||height<.00001){loading=false;statusBox.hidden=false;status.textContent='Model size could not be measured. Choose another model.';return}
@@ -84,7 +83,7 @@ async function start(){try{const promise=ar.start();if(ar.video)ar.video.style.z
   const elapsed=Math.max(0,(performance.now()-lossTime)/1000),prediction=Math.min(elapsed,.35);
   poseRoot.position.copy(lossPosition).addScaledVector(lossVelocity,prediction);
   predictedQuat.setFromAxisAngle(angularAxis,lossAngular*prediction);poseRoot.quaternion.copy(lossRotation).multiply(predictedQuat).normalize();
-  if(elapsed>=.35){record('LOST');setOpacity(Math.max(0,1-(elapsed-.35)/.2));if(elapsed>=.55)poseRoot.visible=false}
+  if(elapsed>=.35)record('LOST');
  }
  if(mixer)mixer.update(delta);renderer.render(scene,camera);
  });showStatus()}catch(e){console.error(e);statusBox.hidden=false;status.textContent='Camera unavailable. Allow access in Safari and retry.';retry.hidden=false}}
